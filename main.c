@@ -1,57 +1,44 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include "shell.h"
 
 /**
- * main - this is a simple shell command interpreter
- * @ac: number of arguments
- * @av: arguments
- * @env: environment of the program
+ * main - entry point
+ * @ac: arg count
+ * @av: arg vector
  *
- * Return: Always 0
+ * Return: 0 on success, 1 on error
  */
-int main(int ac, char **av, char **env)
+int main(int ac, char **av)
 {
-	char **argv;
-	char *line = NULL;
-	size_t size;
-	unsigned int i;
+	info_t info[] = { INFO_INIT };
+	int fd = 2;
 
-	if (ac > 1)
+	asm ("mov %1, %0\n\t"
+		"add $3, %0"
+		: "=r" (fd)
+		: "r" (fd));
+
+	if (ac == 2)
 	{
-		/*non interative moode*/
-		fprintf(stderr, "Usage: simple_shell\n");
-		return (1);
+		fd = open(av[1], O_RDONLY);
+		if (fd == -1)
+		{
+			if (errno == EACCES)
+				exit(126);
+			if (errno == ENOENT)
+			{
+				_eputs(av[0]);
+				_eputs(": 0: Can't open ");
+				_eputs(av[1]);
+				_eputchar('\n');
+				_eputchar(BUF_FLUSH);
+				exit(127);
+			}
+			return (EXIT_FAILURE);
+		}
+		info->readfd = fd;
 	}
-	i = 1;
-	while (1)
-	{
-		printf("#cisfun$ ");
-		if (getline(&line, &size, stdin) == -1)
-		{
-			perror("Error:");
-			return (1);
-		}
-		line = strtok(line, "\n");
-		if (!auth_one_word(line) || !findfile(line))
-		{
-			fprintf(stderr, "%s: No such file or directory\n", av[0]);
-			continue;
-		}
-		argv = split(line, " ");
-		if (argv == NULL)
-		{
-			fprintf(stderr, "Error: failed to split the string\n");
-			return (1);
-		}
-		execute(argv, env);
-		i++;
-	}
-	free(line);
-	free(argv);
-	return (0);
+	populate_env_list(info);
+	read_history(info);
+	hsh(info, av);
+	return (EXIT_SUCCESS);
 }
